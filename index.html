@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tulis by SGS - Editor Profesional</title>
+    
+    <!-- Tailwind CSS untuk Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- html2pdf.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <link rel="manifest" id="manifest-link">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Times+New+Roman&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; 
+            margin: 0; padding: 0;
+            display: flex; flex-direction: column;
+            height: 100vh; overflow: hidden;
+            transition: background-color 0.3s ease;
+        }
+
+        body.dark { background-color: #111827; }
+
+        .toolbar-scroll {
+            overflow-x: auto; white-space: nowrap;
+            scrollbar-width: thin; -webkit-overflow-scrolling: touch;
+        }
+        .toolbar-scroll::-webkit-scrollbar { height: 4px; }
+        .toolbar-scroll::-webkit-scrollbar-thumb { background-color: #d1d5db; border-radius: 4px; }
+        body.dark .toolbar-scroll::-webkit-scrollbar-thumb { background-color: #4b5563; }
+
+        #workspace {
+            flex-grow: 1; overflow-y: auto; padding: 20px;
+            display: flex; justify-content: center; align-items: flex-start;
+        }
+
+        /* * KERTAS */
+        .paper {
+            background-color: white;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            font-family: 'Times New Roman', Times, serif; 
+            color: #000; outline: none; line-height: 1.5;
+            transition: transform 0.3s ease; position: relative;
+            white-space: pre-wrap; 
+            tab-size: 6; 
+            -moz-tab-size: 6;
+        }
+
+        body.dark .paper { box-shadow: 0 0 15px rgba(255, 255, 255, 0.05); }
+
+        .size-a4 { width: 210mm; min-height: 297mm; padding: 2.54cm; }
+        .size-letter { width: 215.9mm; min-height: 279.4mm; padding: 2.54cm; }
+        .size-f4 { width: 215mm; min-height: 330mm; padding: 2.54cm; }
+        .size-slide { width: 297mm; min-height: 210mm; padding: 1.5cm; font-family: 'Inter', sans-serif; font-size: 18pt; }
+
+        .paper img { max-width: 100%; height: auto; display: block; margin: 10px auto; }
+
+        /* Styling Tabel */
+        .paper table {
+            width: 100%; border-collapse: collapse; margin-bottom: 1rem;
+            table-layout: auto;
+        }
+        .paper td, .paper th {
+            border: 1px solid #000; padding: 8px; position: relative;
+            transition: background-color 0.2s;
+        }
+        .paper th { resize: horizontal; overflow: hidden; background-color: #f9fafb; font-weight: bold; }
+        
+        .cell-selected {
+            background-color: rgba(59, 130, 246, 0.3) !important;
+        }
+
+        [contenteditable]:empty:before { content: attr(placeholder); color: #9ca3af; font-style: italic; }
+
+        .btn-toolbar {
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 0.5rem; border-radius: 0.375rem; color: #4b5563;
+            transition: all 0.2s; background: transparent; cursor: pointer;
+        }
+        .btn-toolbar:hover { background-color: #e5e7eb; color: #111827; }
+        body.dark .btn-toolbar { color: #9ca3af; }
+        body.dark .btn-toolbar:hover { background-color: #374151; color: #f3f4f6; }
+
+        @media (max-width: 768px) {
+            #workspace { padding: 10px; }
+            .paper:not(.size-slide) {
+                transform: scale(calc(100vw / 820)); 
+                transform-origin: top left;
+                margin-bottom: calc(297mm * (100vw / 820) - 297mm);
+            }
+            .size-slide {
+                transform: scale(calc(100vw / 1150)); 
+                transform-origin: top left;
+                margin-bottom: calc(210mm * (100vw / 1150) - 210mm);
+            }
+        }
+    </style>
+</head>
+<body class="transition-colors duration-300">
+
+    <!-- Header Aplikasi -->
+    <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex justify-between items-center z-10 shadow-sm shrink-0">
+        <div class="flex items-center gap-2">
+            <div class="bg-blue-600 text-white p-1.5 rounded-lg">
+                <i class="ph ph-pen-nib text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold text-gray-800 dark:text-white leading-tight">Tulis <span class="text-blue-600 dark:text-blue-400 font-medium">by SGS</span></h1>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Word & Presentasi Editor</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <!-- Tombol Dark Mode -->
+            <button onclick="toggleDarkMode()" id="darkModeBtn" class="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
+                <i class="ph ph-moon text-xl" id="darkModeIcon"></i>
+            </button>
+
+            <!-- Tombol Pratinjau (Preview) -->
+            <button id="previewBtn" onclick="togglePreview()" class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition shadow-sm border border-gray-200 dark:border-gray-600">
+                <i class="ph ph-eye text-lg" id="previewIcon"></i> <span id="previewText" class="hidden sm:inline">Pratinjau</span>
+            </button>
+            
+            <!-- Tombol Install -->
+            <button id="installBtn" class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition shadow-sm border border-gray-200 dark:border-gray-600">
+                <i class="ph ph-download-simple text-lg"></i> <span class="hidden sm:inline">Install App</span>
+            </button>
+            
+            <!-- Tombol Ekspor -->
+            <button onclick="exportToPDF()" class="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition shadow-sm">
+                <i class="ph ph-file-pdf text-lg"></i> <span class="hidden sm:inline">Ekspor PDF</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Toolbar Editor -->
+    <div id="toolbar" class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-2 py-2 flex items-center gap-1 toolbar-scroll shadow-sm z-10 shrink-0 pb-2 transition-all">
+        
+        <div class="flex items-center border-r border-gray-300 dark:border-gray-600 pr-2 mr-2 shrink-0">
+            <i class="ph ph-file-text text-gray-500 mr-1"></i>
+            <select id="paperSize" onchange="changePaperSize()" class="text-sm border-none bg-transparent focus:ring-0 text-gray-700 dark:text-gray-300 font-medium cursor-pointer">
+                <option value="size-a4">Kertas A4</option>
+                <option value="size-letter">Kertas Letter</option>
+                <option value="size-f4">Kertas F4 (Folio)</option>
+                <option value="size-slide">Slide Presentasi</option>
+            </select>
+        </div>
+
+        <div class="flex items-center border-r border-gray-300 dark:border-gray-600 pr-2 mr-2 shrink-0">
+            <select onchange="formatDoc('fontName', this.value)" class="text-sm border-none bg-transparent focus:ring-0 text-gray-700 dark:text-gray-300 cursor-pointer font-medium">
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Arial">Arial</option>
+                <option value="Inter">Inter (Modern)</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Courier New">Courier</option>
+            </select>
+        </div>
+
+        <div class="flex items-center border-r border-gray-300 dark:border-gray-600 pr-2 mr-2 shrink-0">
+            <select onchange="formatDoc('fontSize', this.value); this.selectedIndex=0;" class="text-sm border-none bg-transparent focus:ring-0 text-gray-700 dark:text-gray-300 cursor-pointer">
+                <option value="">Ukuran Font</option>
+                <option value="1">10pt (Sangat Kecil)</option>
+                <option value="2">11pt (Kecil)</option>
+                <option value="3">12pt (Standar)</option>
+                <option value="4">14pt (Sedang)</option>
+                <option value="5">18pt (Besar)</option>
+                <option value="6">24pt (Judul)</option>
+                <option value="7">36pt (Raksasa)</option>
+            </select>
+        </div>
+
+        <!-- Tombol Undo & Redo -->
+        <button class="btn-toolbar shrink-0 text-gray-600" onclick="formatDoc('undo')" title="Batal (Undo)">
+            <i class="ph ph-arrow-u-up-left"></i>
+        </button>
+        <button class="btn-toolbar shrink-0 text-gray-600" onclick="formatDoc('redo')" title="Ulangi (Redo)">
+            <i class="ph ph-arrow-u-up-right"></i>
+        </button>
+        
+        <div class="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1 shrink-0"></div>
+
+        <!-- Tombol Format Teks -->
+        <button class="btn-toolbar shrink-0" onclick="formatDoc('bold')" title="Tebal">
+            <i class="ph ph-text-b"></i>
+        </button>
+        <button class="btn-toolbar shrink-0" onclick="formatDoc('italic')" title="Miring">
+            <i class="ph ph-text-italic"></i>
+        </button>
+        <button class="btn-toolbar shrink-0" onclick="formatDoc('underline')" title="Garis Bawah">
+            <i class="ph ph-text-underline"></i>
+        </button>
+        
+        <div class="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1 shrink-0"></div>
+        
+        <button class="btn-toolbar shrink-0" onclick="formatDoc('justifyLeft')" title="Rata Kiri">
+            <i class="ph ph-text-align-left"></i>
+        </button>
+        <button class="btn-toolbar shrink-0" onclick="formatDoc('justifyCenter')" title="Rata Tengah">
+            <i class="ph ph-text-align-center"></i>
+        </button>
+        <button class="btn-toolbar shrink-0" onclick="formatDoc('justifyRight')" title="Rata Kanan">
+            <i class="ph ph-text-align-right"></i>
+        </button>
+
+        <div class="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1 shrink-0"></div>
+
+        <!-- Tombol TAB Manual -->
+        <button class="btn-toolbar shrink-0 font-bold text-gray-700 dark:text-gray-200" onclick="insertTab()" title="Sisipkan Tabulasi (Agar titik dua lurus)">
+            <i class="ph ph-arrow-line-right"></i> <span class="text-xs ml-1 hidden md:inline">Tab</span>
+        </button>
+
+        <!-- Tombol Buka Modal Tabel -->
+        <button class="btn-toolbar shrink-0 text-green-600" onclick="openTableModal()" title="Buat Tabel Dinamis">
+            <i class="ph ph-table"></i> <span class="text-xs ml-1 font-semibold hidden md:inline">Tabel</span>
+        </button>
+
+        <!-- Tombol Upload Gambar -->
+        <button class="btn-toolbar shrink-0 text-purple-600" onclick="document.getElementById('imageUpload').click()" title="Upload Foto">
+            <i class="ph ph-image"></i> <span class="text-xs ml-1 font-semibold hidden md:inline">Foto</span>
+        </button>
+        <input type="file" id="imageUpload" accept="image/*" style="display: none;" onchange="handleImageUpload(event)">
+    </div>
+
+    <!-- Area Kertas -->
+    <main id="workspace">
+        <div id="editor" class="paper size-a4" contenteditable="true" spellcheck="false" placeholder="Ketik dokumen atau presentasi Anda di sini..."></div>
+    </main>
+
+    <!-- Modal Tabel Dinamis -->
+    <div id="tableModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-xl w-80">
+            <h2 class="text-lg font-bold mb-4 text-gray-800 dark:text-white">Buat Tabel</h2>
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 dark:text-gray-300 mb-1">Jumlah Kolom (Menyamping)</label>
+                <input type="number" id="colCount" value="3" min="1" max="10" class="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-800 dark:text-white focus:outline-none focus:border-blue-500">
+            </div>
+            <div class="mb-5">
+                <label class="block text-sm text-gray-600 dark:text-gray-300 mb-1">Jumlah Baris (Ke bawah)</label>
+                <input type="number" id="rowCount" value="3" min="1" max="20" class="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-800 dark:text-white focus:outline-none focus:border-blue-500">
+            </div>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeTableModal()" class="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 rounded">Batal</button>
+                <button onclick="executeInsertTable()" class="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded">Sisipkan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logika Aplikasi -->
+    <script>
+        const editor = document.getElementById('editor');
+
+        // ==========================================
+        // 0. LOGIKA MODE PREVIEW (PRATINJAU)
+        // ==========================================
+        let isPreviewMode = false;
+        function togglePreview() {
+            isPreviewMode = !isPreviewMode;
+            const toolbar = document.getElementById('toolbar');
+            const icon = document.getElementById('previewIcon');
+            const text = document.getElementById('previewText');
+            const btn = document.getElementById('previewBtn');
+
+            if (isPreviewMode) {
+                // Aktifkan Mode Pratinjau
+                editor.contentEditable = "false";
+                toolbar.style.display = "none"; // Sembunyikan alat edit
+                icon.classList.replace('ph-eye', 'ph-pencil-simple');
+                text.innerText = "Mode Edit";
+                
+                // Ubah gaya tombol menjadi indikator aktif (warna biru)
+                btn.classList.add('bg-blue-100', 'text-blue-700', 'border-blue-300', 'dark:bg-blue-900', 'dark:text-blue-200');
+                btn.classList.remove('bg-gray-100', 'text-gray-700', 'border-gray-200', 'dark:bg-gray-700', 'dark:text-gray-200', 'dark:border-gray-600');
+            } else {
+                // Kembali ke Mode Edit
+                editor.contentEditable = "true";
+                toolbar.style.display = "flex"; // Tampilkan alat edit
+                icon.classList.replace('ph-pencil-simple', 'ph-eye');
+                text.innerText = "Pratinjau";
+                
+                // Kembalikan gaya tombol standar
+                btn.classList.remove('bg-blue-100', 'text-blue-700', 'border-blue-300', 'dark:bg-blue-900', 'dark:text-blue-200');
+                btn.classList.add('bg-gray-100', 'text-gray-700', 'border-gray-200', 'dark:bg-gray-700', 'dark:text-gray-200', 'dark:border-gray-600');
+                editor.focus();
+            }
+        }
+
+        // Dark Mode
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark');
+            const icon = document.getElementById('darkModeIcon');
+            if(document.body.classList.contains('dark')) {
+                icon.classList.replace('ph-moon', 'ph-sun');
+            } else {
+                icon.classList.replace('ph-sun', 'ph-moon');
+            }
+        }
+
+        // ==========================================
+        // 1. LOGIKA TABULASI
+        // ==========================================
+        function insertTab() {
+            document.execCommand('insertText', false, '\t');
+            editor.focus();
+        }
+
+        editor.addEventListener('keydown', function(e) {
+            if (e.key === 'Tab') {
+                e.preventDefault(); 
+                document.execCommand('insertText', false, '\t'); 
+            }
+        });
+
+        // ==========================================
+        // 2. LOGIKA TABEL
+        // ==========================================
+        function openTableModal() { document.getElementById('tableModal').classList.remove('hidden'); }
+        function closeTableModal() { document.getElementById('tableModal').classList.add('hidden'); editor.focus(); }
+        
+        function executeInsertTable() {
+            const cols = document.getElementById('colCount').value || 3;
+            const rows = document.getElementById('rowCount').value || 3;
+            let html = '<br><table><tbody>';
+            for(let i = 0; i < rows; i++) {
+                html += '<tr>';
+                for(let j = 0; j < cols; j++) {
+                    if(i === 0) html += '<th>Header</th>';
+                    else html += '<td>Data</td>';
+                }
+                html += '</tr>';
+            }
+            html += '</tbody></table><br>';
+            closeTableModal();
+            document.execCommand('insertHTML', false, html);
+        }
+
+        let isDraggingCell = false;
+        editor.addEventListener('mousedown', (e) => {
+            if(e.target.tagName === 'TD' || e.target.tagName === 'TH') {
+                isDraggingCell = true;
+                editor.querySelectorAll('.cell-selected').forEach(el => el.classList.remove('cell-selected'));
+                e.target.classList.add('cell-selected');
+            } else {
+                editor.querySelectorAll('.cell-selected').forEach(el => el.classList.remove('cell-selected'));
+            }
+        });
+        editor.addEventListener('mouseover', (e) => {
+            if(isDraggingCell && (e.target.tagName === 'TD' || e.target.tagName === 'TH')) e.target.classList.add('cell-selected'); 
+        });
+        editor.addEventListener('mouseup', () => { isDraggingCell = false; });
+
+        // ==========================================
+        // 3. LOGIKA FORMATTING
+        // ==========================================
+        function formatDoc(cmd, value=null) {
+            // Hindari eksekusi format jika sedang mode Pratinjau (Read-only)
+            if(isPreviewMode) return;
+
+            const selectedCells = editor.querySelectorAll('.cell-selected');
+            if(selectedCells.length > 0) {
+                selectedCells.forEach(cell => {
+                    const range = document.createRange();
+                    range.selectNodeContents(cell);
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                    document.execCommand(cmd, false, value);
+                });
+                window.getSelection().removeAllRanges();
+            } else {
+                document.execCommand(cmd, false, value);
+            }
+            editor.focus();
+        }
+
+        // ==========================================
+        // 4. LAIN-LAIN
+        // ==========================================
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const imgHTML = `<br/><img src="${e.target.result}" alt="Gambar Sisipan"/><br/>`;
+                    document.execCommand('insertHTML', false, imgHTML);
+                    editor.focus();
+                };
+                reader.readAsDataURL(file);
+            }
+            event.target.value = ''; 
+        }
+
+        function changePaperSize() {
+            const size = document.getElementById('paperSize').value;
+            editor.classList.remove('size-a4', 'size-letter', 'size-f4', 'size-slide');
+            editor.style.minHeight = '';
+            editor.classList.add(size);
+            window.dispatchEvent(new Event('resize'));
+        }
+
+        function exportToPDF() {
+            const paperClass = document.getElementById('paperSize').value;
+            editor.querySelectorAll('.cell-selected').forEach(el => el.classList.remove('cell-selected'));
+
+            const contentHeightPx = editor.scrollHeight; 
+            const pxToMm = 25.4 / 96;
+            let dynamicHeightMm = contentHeightPx * pxToMm;
+
+            let widthMm = 210; 
+            let orientationPDF = 'portrait';
+            
+            if(paperClass === 'size-letter') widthMm = 215.9;
+            if(paperClass === 'size-f4') widthMm = 215;
+            if(paperClass === 'size-slide') {
+                widthMm = 297;
+                orientationPDF = 'landscape';
+                if(dynamicHeightMm < 210) dynamicHeightMm = 210; 
+            }
+
+            let formatPDF = [widthMm, Math.max(dynamicHeightMm, 150)];
+
+            const btn = document.querySelector('button[onclick="exportToPDF()"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="ph ph-spinner animate-spin text-lg"></i> <span class="hidden sm:inline">Memproses...</span>';
+            btn.disabled = true;
+
+            const opt = {
+                margin:       0,
+                filename:     'Dokumen_SGS_' + new Date().getTime() + '.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, windowWidth: editor.scrollWidth },
+                jsPDF:        { unit: 'mm', format: formatPDF, orientation: 'portrait' } 
+            };
+
+            if(paperClass === 'size-slide') opt.jsPDF.orientation = 'landscape';
+
+            editor.style.boxShadow = 'none'; editor.style.margin = '0';
+            editor.style.transform = 'none'; editor.style.minHeight = 'auto'; 
+
+            html2pdf().set(opt).from(editor).save().then(() => {
+                editor.style.boxShadow = ''; editor.style.margin = '';
+                editor.style.minHeight = ''; btn.innerHTML = originalText;
+                btn.disabled = false; window.dispatchEvent(new Event('resize'));
+            });
+        }
+
+        window.addEventListener('resize', () => {
+            const size = document.getElementById('paperSize').value;
+            if (window.innerWidth <= 768) {
+                if(size === 'size-slide') editor.style.transform = 'scale(calc(100vw / 1150))';
+                else editor.style.transform = 'scale(calc(100vw / 820))';
+            } else { editor.style.transform = 'none'; }
+        });
+        window.dispatchEvent(new Event('resize'));
+
+        // PWA Script
+        const manifestJSON = {
+            "name": "Tulis by SGS", "short_name": "Tulis SGS", "display": "standalone",
+            "theme_color": "#2563eb", "icons": [{"src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48cmVjdCB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgZmlsbD0ibm9uZSIvPjxwb2x5Z29uIHBvaW50cz0iMjI0LjA1OSAxNjQgMTI4IDIyMS40MDMgMzEuOTQxIDE2NCAzMS45NDEgOTIgMTI4IDM0LjU5NyAyMjQuMDU5IDkyIDIyNC4wNTkgMTY0IiBmaWxsPSJub25lIiBzdHJva2U9IiMyNTYzZWIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIxNiIvPjwvc3ZnPg==", "sizes": "192x192", "type": "image/svg+xml"}]
+        };
+        document.getElementById('manifest-link').href = URL.createObjectURL(new Blob([JSON.stringify(manifestJSON)], {type: 'application/json'}));
+
+        let deferredPrompt;
+        const installBtn = document.getElementById('installBtn');
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault(); deferredPrompt = e; installBtn.style.display = 'flex';
+        });
+
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') installBtn.style.display = 'none';
+                deferredPrompt = null;
+            } else { alert("Gunakan menu browser 'Tambahkan ke Layar Utama'."); }
+        });
+        if (window.matchMedia('(display-mode: standalone)').matches) installBtn.style.display = 'none';
+    </script>
+</body>
+</html>
